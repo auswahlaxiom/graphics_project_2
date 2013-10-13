@@ -1,0 +1,42 @@
+
+CC = g++
+OPT = -I. -I/usr/include/glm -ggdb
+LIBOPT = -lglut -lGL -lGLEW
+
+all : viewer
+
+buffer.o : buffer.c buffer.h Makefile
+	$(CC) $(OPT) -c buffer.c
+
+framebuffer.o : framebuffer.c framebuffer.h Makefile
+	$(CC) $(OPT) -c framebuffer.c
+
+tfeedback.o : tfeedback.c buffer.h Makefile
+	$(CC) $(OPT) -c tfeedback.c
+
+shader.o : shader.c shader.h Makefile
+	$(CC) $(OPT) -c shader.c
+
+program.o : program.c shader.h program.h Makefile
+	$(CC) $(OPT) -c program.c
+
+vertexarray.o : vertexarray.c buffer.h vertexarray.h Makefile
+	$(CC) $(OPT) -c vertexarray.c
+
+bezier.o : bezier.c *.h Makefile
+	$(CC) $(OPT) -c bezier.c
+
+viewer.o : viewer.c *.h Makefile
+	$(CC) $(OPT) -c viewer.c
+
+shadow-volumes.o : shadow-volumes.c *.h Makefile
+	$(CC) $(OPT) -c shadow-volumes.c
+
+loop.o : loop.c *.h Makefile
+	$(CC) $(OPT) -c loop.c
+
+viewer : viewer.o shader.o buffer.o program.o vertexarray.o 
+	$(CC) $(OPT) -o viewer viewer.o shader.o buffer.o program.o vertexarray.o $(LIBOPT)
+
+clean :
+	rm *.o viewer
