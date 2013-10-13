@@ -1,6 +1,6 @@
 
 #include <GL/glew.h>
-#include <OpenGL/gl.h>
+#include <GL/gl.h>
 #include <vector>
 #include <cassert>
 #include <iostream>

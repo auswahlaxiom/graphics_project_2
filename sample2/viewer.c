@@ -123,7 +123,7 @@ Program *cube_program = NULL;
 
 void setup_buffers()
 {
-  // The first argument to the Buffer constructor is the number of 
+  // Fhe first argument to the Buffer constructor is the number of 
   // components per vertex (basically, numbers per vertex)
   // For square, vertices are 2D - they have 2 coordinates; hence 
   //  the number of components is 2, and there are 4 vertices.
@@ -160,7 +160,7 @@ void setup_programs()
   // which takes two file names (first=vertex shader source, 
   // second=fragment shader source) and creates a program from them.
   // The return value is of type Program*.
-  // Note that we print a message before calling it because it
+  // Note that we print a messahe before calling it because it
   // prints out the GLSL compiler and linker messages - this is a way to know
   // which of your shaders/programs has a problem.
 

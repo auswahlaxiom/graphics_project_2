@@ -1,5 +1,5 @@
 
-#include <OpenGL/gl.h>
+#include <GL/gl.h>
 #include <string>
 
 #pragma once
