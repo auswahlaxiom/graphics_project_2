@@ -19,6 +19,9 @@
 #include "vertexarray.h"
 #include "shader.h"
 
+//Zach additions
+#include "triangle.h"
+
 using namespace gl_CSCI441;
 using namespace std;
 using namespace glm;
@@ -32,6 +35,12 @@ static GLint wid;               /* GLUT window id; value asigned in main() and s
 static GLint vpw = VPD_DEFAULT; /* viewport dimensions; changed when window is resized (resize callback) */
 static GLint vph = VPD_DEFAULT;
 
+// User interface absolute and intermediate rotation matricies
+mat4 R_trackball; //the superposition of all ‘finished’ rotations (matrix)
+mat4 R_trackball_0; //the rotation that is currently being specified using the trackball interface (matrix)
+
+// Input mesh info
+int number_of_triangles, number_of_vertices;
 /* ----------------------------------------------------- */
 
 // Here are desired buffer contents for a square extending from -1 to 1 in x and y.
@@ -119,6 +128,12 @@ Buffer *buf_cube_faceId = NULL;
 Program *square_program = NULL;
 Program *cube_program = NULL;
 
+//Input file objects
+VertexArray *va_input = NULL;
+Buffer *buf_input_locations = NULL;
+Buffer *buf_input_normals = NULL;
+Program *input_program = NULL;
+
 /* ----------------------------------------------------- */
 
 void setup_buffers()
@@ -152,6 +167,107 @@ void setup_buffers()
   va_cube->attachAttribute(1,buf_cube_faceId);
 }
 
+void setup_input_buffers()
+{
+  ifstream ifs("input.t");
+
+  ifs >> number_of_triangles >> number_of_vertices;
+
+  cout << "Expecting " << number_of_triangles << " triangles, " << number_of_vertices << " verticies." << endl;
+  
+  Triangle *tri_table = new Triangle[number_of_triangles];
+  vec3 *vert_table = new vec3[number_of_vertices];
+  
+  for (int i=0; i<number_of_triangles; i++ )
+    ifs >> tri_table[i].a >> tri_table[i].b >> tri_table[i].c;
+  
+  for (int i=0; i<number_of_vertices; i++ )
+    ifs >> vert_table[i].x >> vert_table[i].y >> vert_table[i].z;
+
+  vec3*vertex_soup = new vec3[number_of_triangles * 3];
+  for (int i = 0; i < number_of_triangles; i++) {
+    Triangle t = tri_table[i];
+    vertex_soup[i * 3 + 0] = vert_table[t.a];
+    vertex_soup[i * 3 + 1] = vert_table[t.b];
+    vertex_soup[i * 3 + 2] = vert_table[t.c];
+  }
+
+  cout << "Finished creating vertex and triangle table." << endl;
+
+  //array of normal vectors
+  vec3 *N = new vec3[number_of_vertices];
+  for (int i = 0; i < number_of_triangles; i++)
+  {
+    Triangle t = tri_table[i];
+    vec3 a = vert_table[t.a];
+    vec3 b = vert_table[t.b];
+    vec3 c = vert_table[t.c];
+
+    vec3 ab = vec3(b.x - a.x, b.y - a.y, b.z - a.z);
+    vec3 ac = vec3(c.x - a.x, c.y - a.y, c.z - a.z);
+    vec3 normal = cross(ab, ac);
+
+    N[t.a] += normal;
+    N[t.b] += normal;
+    N[t.c] += normal;
+  }
+
+  cout << "Created area weighted average of normals." << endl;
+
+  //Area weighted average for each vertex
+  GLfloat *normalArray = new GLfloat[9 * number_of_triangles];
+  GLfloat *coordnArray = new GLfloat[9 * number_of_triangles];
+
+  int j = 0;
+  for (int i = 0; i < number_of_triangles; i++) {
+    Triangle t = tri_table[i];
+    vec3 a = vertex_soup[t.a];
+    vec3 b = vertex_soup[t.b];
+    vec3 c = vertex_soup[t.c];
+
+    normalArray[j * 3 + 0] = N[t.a].x;
+    normalArray[j * 3 + 1] = N[t.a].y;
+    normalArray[j * 3 + 2] = N[t.a].z;
+
+    coordnArray[j * 3 + 0] = a.x;
+    coordnArray[j * 3 + 1] = a.y;
+    coordnArray[j * 3 + 2] = a.z;
+
+    j++;
+
+    normalArray[j * 3 + 0] = N[t.b].x;
+    normalArray[j * 3 + 1] = N[t.b].y;
+    normalArray[j * 3 + 2] = N[t.b].z;
+
+    coordnArray[j * 3 + 0] = b.x;
+    coordnArray[j * 3 + 1] = b.y;
+    coordnArray[j * 3 + 2] = b.z;
+
+    j++;
+
+    normalArray[j * 3 + 0] = N[t.c].x;
+    normalArray[j * 3 + 1] = N[t.c].y;
+    normalArray[j * 3 + 2] = N[t.c].z;
+
+    coordnArray[j * 3 + 0] = c.x;
+    coordnArray[j * 3 + 1] = c.y;
+    coordnArray[j * 3 + 2] = c.z;
+
+    j++;
+  }
+
+  cout << "Created buffer arrays for loc and normal." << endl;
+
+  buf_input_locations = new Buffer(3, number_of_vertices, coordnArray);
+  buf_input_normals   = new Buffer(3, number_of_vertices, normalArray);
+
+  va_input = new VertexArray;
+  va_cube->attachAttribute(0,buf_input_locations);
+  va_cube->attachAttribute(1,buf_input_normals);
+
+  cout << "Finished attatching buffers to input vertex array." << endl;
+}
+
 /* ----------------------------------------------------- */
 
 void setup_programs()
@@ -168,11 +284,14 @@ void setup_programs()
   cube_program = createProgram("shaders/vsh_cube.glsl","shaders/fsh_cube.glsl");
   cout << "Creating the square program..." << endl;
   square_program = createProgram("shaders/vsh_square.glsl","shaders/fsh_square.glsl");
+
+  cout << "Creating input program..." << endl;
+  input_program = createProgram("shaders/vsh_input.glsl", "shaders/fsh_input.glsl");
 }
 
 /* ----------------------------------------------------- */
 
-bool animate = true;    // animate or not
+bool animate = false;    // animate or not
 float multiplier = 1.0; // controls rotation speed
 int dcounter = 1;       // used to increment the frame counter (set to zero to freeze)
 
@@ -196,7 +315,7 @@ void draw()
 
   // want to disable culling for square - it's not a watertight surface
   //  what would happen if you enable it?
-  glDisable(GL_CULL_FACE);
+//  glDisable(GL_CULL_FACE);
 
   // want to use depth test to get visibility right
   glEnable(GL_DEPTH_TEST);
@@ -207,11 +326,12 @@ void draw()
   mat4 P = perspective(float(1.0+0.5*sin(counter/100.0))*10.0f,1.0f,18.0f,22.0f);
 
   // we'll use this as rotation component of the modelview matrix
-  mat4 R = rotate(mat4(),angle,vec3(1.0f,2.0f,0.0f));
+  mat4 R_animation = rotate(mat4(),angle,vec3(1.0f,2.0f,0.0f));
 
   // this is technically a part of the modelview matrix - it rotates around the axis [0,0,20]
   //  and then moves "forward", i.e. along -Z, by 20 units
-  mat4 MV = translate(mat4(),vec3(0.0f,0.0f,-20.0f)) * R;
+  // Add in the user interface absolut rotation matrix R_trackball and intermediate rotation R_trackball_0
+  mat4 MV = translate(mat4(),vec3(0.0f,0.0f,-20.0f)) * R_trackball_0 * R_trackball * R_animation;
 
   // send matrices P and MV into uniform variables of the program used to render square
   // &P[0][0] is the pointer to the entries of matrix P, same for MV
@@ -220,53 +340,65 @@ void draw()
   square_program->setUniform("P",&P[0][0]);
   square_program->setUniform("MV",&MV[0][0]);
 
-  // turn on the square program...
-  square_program->on();
+  // // turn on the square program...
+  // square_program->on();
 
-  // Send vertices 0...5 to pipeline; use the index buffer ix_square.
-  // Recall that ix_square contains 0 1 2 0 2 3, which means that 
-  // vertices with data at indices 0 1 2 0 2 3 in the buffers attached to the 
-  // vertex array are going to be generated.
-  // The first argument instructs the pipeline how to set up triangles; GL_TRIANGLES=triangle soup
-  va_square->sendToPipelineIndexed(GL_TRIANGLES,ix_square,0,6);
+  // // Send vertices 0...5 to pipeline; use the index buffer ix_square.
+  // // Recall that ix_square contains 0 1 2 0 2 3, which means that 
+  // // vertices with data at indices 0 1 2 0 2 3 in the buffers attached to the 
+  // // vertex array are going to be generated.
+  // // The first argument instructs the pipeline how to set up triangles; GL_TRIANGLES=triangle soup
+  // va_square->sendToPipelineIndexed(GL_TRIANGLES,ix_square,0,6);
 
-  // turn the program off
-  square_program->off();
+  // // turn the program off
+  // square_program->off();
 
-  // OK to enable culling now: we'll be drawing cubes
-  glEnable(GL_CULL_FACE);
+  // // OK to enable culling now: we'll be drawing cubes
+  // glEnable(GL_CULL_FACE);
 
-  // We must to send the matrices again: this time to the cube program.
-  // Different programs generally maintain independent sets of uniforms.
-  // A more elegant and less wasteful way to do this could be based on GLSL subroutines.
-  cube_program->setUniform("MV",&MV[0][0]);
-  cube_program->setUniform("P",&P[0][0]);
+  // // We must to send the matrices again: this time to the cube program.
+  // // Different programs generally maintain independent sets of uniforms.
+  // // A more elegant and less wasteful way to do this could be based on GLSL subroutines.
+  // cube_program->setUniform("MV",&MV[0][0]);
+  // cube_program->setUniform("P",&P[0][0]);
 
-  // Turn on cube program
-  cube_program->on();
+  // // Turn on cube program
+  // cube_program->on();
 
-  // send translation values - this will move the cube so that it is centered at the center of the square
-  // Note that you can also send a 3D vector to a uniform vec3 type variable using the setUniform method.
-  //  Just use 3 values instead of 2 to do that.
-  cube_program->setUniform("T",0.8f,0.8f);
+  // // send translation values - this will move the cube so that it is centered at the center of the square
+  // // Note that you can also send a 3D vector to a uniform vec3 type variable using the setUniform method.
+  // //  Just use 3 values instead of 2 to do that.
+  // cube_program->setUniform("T",0.8f,0.8f);
 
-  // Send vertices 0...36 to the pipeline. In this case, we use `plain' rendering with no index
-  // This means that 36 vertices are going to be formed from contents of the buffers attached 
-  // to the vertex array va_cube 
-  va_cube->sendToPipeline(GL_TRIANGLES,0,36);
+  // // Send vertices 0...36 to the pipeline. In this case, we use `plain' rendering with no index
+  // // This means that 36 vertices are going to be formed from contents of the buffers attached 
+  // // to the vertex array va_cube 
+  // va_cube->sendToPipeline(GL_TRIANGLES,0,36);
   
-  // ... now render three cubes centered at the other vertices of the square
-  cube_program->setUniform("T",-0.8f,0.8f);
-  va_cube->sendToPipeline(GL_TRIANGLES,0,36);
+  // // ... now render three cubes centered at the other vertices of the square
+  // cube_program->setUniform("T",-0.8f,0.8f);
+  // va_cube->sendToPipeline(GL_TRIANGLES,0,36);
 
-  cube_program->setUniform("T",0.8f,-0.8f);
-  va_cube->sendToPipeline(GL_TRIANGLES,0,36);
+  // cube_program->setUniform("T",0.8f,-0.8f);
+  // va_cube->sendToPipeline(GL_TRIANGLES,0,36);
 
-  cube_program->setUniform("T",-0.8f,-0.8f);
-  va_cube->sendToPipeline(GL_TRIANGLES,0,36);
+  // cube_program->setUniform("T",-0.8f,-0.8f);
+  // va_cube->sendToPipeline(GL_TRIANGLES,0,36);
 
-  // turn off program
-  cube_program->off();
+  // // turn off program
+  // cube_program->off();
+
+//=============== Input Program ================
+
+  input_program->setUniform("MV",&MV[0][0]);
+  input_program->setUniform("P",&P[0][0]);
+
+  input_program->on();
+
+  input_program->setUniform("T",0.8f,0.8f);
+  va_input->sendToPipeline(GL_TRIANGLES, 0, number_of_triangles);
+
+  input_program->off();
  
   // make sure all the stuff is drawn
   glFlush();
@@ -301,6 +433,54 @@ void draw()
 //  and the actual mouse button up events...
 bool mouse_button_down = false;
 
+// Additional global variabes for rotations
+
+//i_0 , j_0 : coordinates of the last mouse button down event
+GLint i_0 = -1;
+GLint j_0 = -1;
+
+void sphere_coordinates(GLint i, GLint j, GLfloat& x, GLfloat& y, GLfloat& z)
+{
+  GLfloat d = (GLfloat) VPD_DEFAULT; //screen resolution
+  x = 2.0 * (GLfloat)i / (d - 1.0) - 1.0; //translate i to world coordinates
+  y = -1.0 * (2.0 * (GLfloat)j / (d - 1.0) - 1.0); //translate j to world coordinates
+  if (sqrt(pow(x,2) + pow(y,2)) >= 1.0) {
+    //we are outside circle
+    x = x / sqrt(pow(x,2) + pow(y,2));
+    y = y / sqrt(pow(x,2) + pow(y,2));
+    z = 0;
+  } else {
+    //we are inside circle
+    z = sqrt(1.0 - pow(x, 2) - pow(y,2));
+  }
+}
+
+mat4 rotation_matrix_for_point(GLint i, GLint j)
+{
+  //no rotation if point not specified
+  if (i_0 < 0 || j_0 < 0) {
+    return mat4();
+  }
+
+  GLfloat x, y, z;
+  sphere_coordinates(i, j, x, y, z); //world coordinates of q
+  vec3 q = vec3(x, y, z);
+
+  GLfloat x_0, y_0, z_0;
+  sphere_coordinates(i_0, j_0, x_0, y_0, z_0); //world coordinates of p
+  vec3 p = vec3(x_0, y_0, z_0);
+
+  GLfloat angle = acos(dot(p, q)) * 180.0 / M_PI;
+
+  //rotate from p (at i_0,j_0) to q ( at i,j)
+  if (i == i_0 && j == j_0) {
+    return mat4(); //identity
+  } else {
+    vec3 axis = cross(p, q);
+    return rotate(mat4(), angle, axis);
+  }
+}
+
 void mouse_button(GLint btn, GLint state, GLint mx, GLint my)
 {
   switch( btn ) {
@@ -309,11 +489,23 @@ void mouse_button(GLint btn, GLint state, GLint mx, GLint my)
     case GLUT_DOWN: 
       cout << "Left mouse button pressed @ " << mx << " " << my << endl;
       mouse_button_down = true;
+      i_0 = mx;
+      j_0 = my;
       break;
     case GLUT_UP: 
       if (!mouse_button_down) 
-	return;
+        return;
       cout << "Left mouse button went up @ " << mx << " " << my << endl;
+
+      //reset R_0 to identity, as the rotation has finished
+      R_trackball_0 = mat4();
+
+      //update R to include the latest rotation
+      mat4 R_prime = rotation_matrix_for_point(mx, my);
+      R_trackball = R_prime * R_trackball;
+
+      glutPostRedisplay();
+
       mouse_button_down = false;
       break;
     }
@@ -326,7 +518,7 @@ void mouse_button(GLint btn, GLint state, GLint mx, GLint my)
       break;
     case GLUT_UP:   
       if (!mouse_button_down) 
-	return;
+        return;
       cout << "Middle mouse button went up@ " << mx << " " << my << endl;
       mouse_button_down = false;
       break;
@@ -344,9 +536,10 @@ GLvoid button_motion(GLint mx, GLint my)
 {
   if (!mouse_button_down)
     return;   // mouse button not down - ignore!
+  
+  R_trackball_0 = rotation_matrix_for_point(mx, my);
 
   cout << "Mouse movement with some button down @ " << mx << " " << my << endl;
-
   // refresh the image - in your code, rendering parameters may be changed in button_motion
 
   glutPostRedisplay();
@@ -515,6 +708,7 @@ GLint main(GLint argc, char **argv)
   // initialize programs and buffers
   setup_programs();
   setup_buffers();
+  setup_input_buffers();
 
   // Main loop: keep processing events.
   // This is actually an indefinite loop - you can only exit it using 
