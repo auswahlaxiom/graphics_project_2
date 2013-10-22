@@ -6,7 +6,7 @@
 /* and interpolated on the rasterization stage    */
 /* ---------------------------------------------- */
 
-
+  // TODO: recieve interpolated normals from vsh
 
 
 
@@ -28,10 +28,5 @@ out vec3 fragcolor;
 void main()
 {
 
-  fragcolor = vec3(
-                   0.5,
-                   0.0,
-                   0.4
-                  );
-  
+  fragcolor = vec3(0.5,0.1,0.7);
 }

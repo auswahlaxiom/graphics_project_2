@@ -8,10 +8,11 @@
 /* in the CPU code                                */
 /* ---------------------------------------------- */
 
+// vertices in model coordinates - normalized from -1 to 1 in x, y, z
+layout (location=0) in vec3 coord;
 
-layout(location=0) in vec3 coord;
-layout(location=1) in vec3 normal;
-
+// Normals
+layout (location=1) in vec3 norm;
 
 
 
@@ -22,7 +23,7 @@ layout(location=1) in vec3 normal;
 /* fragments to the fragment shader               */
 /* ---------------------------------------------- */
 
-
+// TODO: pass interpolated normals
 
 
 
@@ -38,7 +39,6 @@ layout(location=1) in vec3 normal;
 
 uniform mat4 MV;  // modelview matrix in homogenous coordinates
 uniform mat4 P;   // projection matrix in homogenous coordinates
-uniform vec2 T;   // translation along xy-plane in model coordinates
 
 
 
@@ -51,18 +51,9 @@ uniform vec2 T;   // translation along xy-plane in model coordinates
 
 void main()
 {
-  
+  // TODO: pass interpolated normals to frag shader
 
-
-  // Explanation of the next line:
-  //  ... -vec(0.5,0.5,0.5) ... : translate the cube to put its center into (0,0,0)
-  //  ... 0.4* ... : scale to a smaller size
-  //  ... +vec3(T,0)... : translate by (Tx,Ty,0) - to one of the corners of the colorful square
-  //  vec4(...) : we need to add homogenous coordinate of 1.0; basically, to convert 3d->3d+homogenous
-  //  MV * ... : reminder of the transform to world coordinates
-  //             rotate about an axis living in xy-plane and translate `forward' (see C++ code)
-
-  vec4 worldCoord = MV * vec4(0.4*(coord-vec3(0.5,0.5,0.5))+vec3(T,0),1.0);
+  vec4 worldCoord = MV * vec4(coord,1.0);
 
 
 

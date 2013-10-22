@@ -40,7 +40,7 @@ mat4 R_trackball; //the superposition of all ‘finished’ rotations (matrix)
 mat4 R_trackball_0; //the rotation that is currently being specified using the trackball interface (matrix)
 
 // Input mesh info
-int number_of_triangles, number_of_vertices;
+int number_of_triangles, number_of_vertices, number_of_u_vertices;
 float x_min, y_min, z_min;
 float x_max, y_max, z_max;
 
@@ -51,54 +51,71 @@ Buffer *buf_input_locations = NULL;
 Buffer *buf_input_normals = NULL;
 Program *input_program = NULL;
 
+
+//cube
+GLfloat cube_vertices[] = {
+
+  0,1,0,  0,0,0,  0,0,1,
+  0,1,0,  0,0,1,  0,1,1,  // face 000 - 010 - 001 - 011
+
+  0,0,1,  0,0,0,  1,0,0,
+  0,0,1,  1,0,0,  1,0,1,  // face 000 - 100 - 001 - 101
+
+  0,0,0,  0,1,0,  1,1,0,
+  0,0,0,  1,1,0,  1,0,0,  // another face ....
+
+  1,0,1,  1,0,0,  1,1,0,
+  1,1,0,  1,1,1,  1,0,1,
+
+  1,1,0,  0,1,0,  0,1,1,
+  0,1,1,  1,1,1,  1,1,0,
+
+  1,1,1,  0,1,1,  0,0,1,
+  0,0,1,  1,0,1,  1,1,1
+};
+
+GLubyte cube_faceId[] = {
+  0,0,0,0,0,0,
+  1,1,1,1,1,1,
+  2,2,2,2,2,2,
+  3,3,3,3,3,3,
+  4,4,4,4,4,4,
+  5,5,5,5,5,5
+};
+VertexArray *va_cube = NULL;
+Buffer *buf_cube_vertices = NULL;
+Buffer *buf_cube_faceId = NULL;
+Program *cube_program = NULL;
+
 /* ----------------------------------------------------- */
 
-void setup_buffers()
+void setup_input_buffers()
 {
-  // Fhe first argument to the Buffer constructor is the number of 
-  // components per vertex (basically, numbers per vertex)
-  // For square, vertices are 2D - they have 2 coordinates; hence 
-  //  the number of components is 2, and there are 4 vertices.
-  // The last argument is a pointer to the actual vertex data.
-  buf_square_vertices = new Buffer(2,4,square_vertices);
-
-  // this is the way to construct index buffers...
-  // 6 is the size of the buffer.
-  ix_square = new IndexBuffer(6,square_indices);
-
-  // build the cube buffers now...
+  //==========cube===========
   buf_cube_vertices = new Buffer(3,36,cube_vertices);
   buf_cube_faceId = new Buffer(1,36,cube_faceId);
-  
-  // construct the square VA
-  va_square = new VertexArray;
-
-  // vertices are attribute #0
-  va_square->attachAttribute(0,buf_square_vertices);
-
-  // same for cube...
-  va_cube = new VertexArray;
+    va_cube = new VertexArray;
   // vertices are attribute #0
   va_cube->attachAttribute(0,buf_cube_vertices);
   // vertices are attribute #1
   va_cube->attachAttribute(1,buf_cube_faceId);
-}
+  //==========cube===========
 
-void setup_input_buffers()
-{
-  ifstream ifs("input.t");
+  ifstream ifs("inputs/cow.t");
 
-  ifs >> number_of_triangles >> number_of_vertices;
+  ifs >> number_of_triangles >> number_of_u_vertices;
+  number_of_vertices = number_of_triangles * 3;
 
-  cout << "Expecting " << number_of_triangles << " triangles, " << number_of_vertices << " verticies." << endl;
+
+  cout << "Expecting " << number_of_triangles << " triangles, " << number_of_u_vertices << " unique verticies." << endl;
   
   Triangle *tri_table = new Triangle[number_of_triangles];
-  vec3 *vert_table = new vec3[number_of_vertices];
+  vec3 *vert_table = new vec3[number_of_u_vertices];
   
   for (int i=0; i<number_of_triangles; i++ )
     ifs >> tri_table[i].a >> tri_table[i].b >> tri_table[i].c;
   
-  for (int i=0; i<number_of_vertices; i++ ) {
+  for (int i=0; i<number_of_u_vertices; i++ ) {
     ifs >> vert_table[i].x >> vert_table[i].y >> vert_table[i].z;
     if (i == 0) {
       x_min = x_max = vert_table[0].x;
@@ -126,13 +143,8 @@ void setup_input_buffers()
     }
   }
 
-  vec3*vertex_soup = new vec3[number_of_triangles * 3];
-  for (int i = 0; i < number_of_triangles; i++) {
-    Triangle t = tri_table[i];
-    vertex_soup[i * 3 + 0] = vert_table[t.a];
-    vertex_soup[i * 3 + 1] = vert_table[t.b];
-    vertex_soup[i * 3 + 2] = vert_table[t.c];
-  }
+  cout << "x min: " << x_min << " y min: " << y_min << " z min: " << z_min << endl;
+  cout << "x max: " << x_max << " y max: " << y_max << " z max: " << z_max << endl;
 
   cout << "Finished creating vertex and triangle table." << endl;
 
@@ -157,15 +169,15 @@ void setup_input_buffers()
   cout << "Created area weighted average of normals." << endl;
 
   //Area weighted average for each vertex
-  GLfloat *normalArray = new GLfloat[9 * number_of_triangles];
-  GLfloat *coordnArray = new GLfloat[9 * number_of_triangles];
+  GLfloat *normalArray = new GLfloat[3 * number_of_vertices];
+  GLfloat *coordnArray = new GLfloat[3 * number_of_vertices];
 
   int j = 0;
   for (int i = 0; i < number_of_triangles; i++) {
     Triangle t = tri_table[i];
-    vec3 a = vertex_soup[t.a];
-    vec3 b = vertex_soup[t.b];
-    vec3 c = vertex_soup[t.c];
+    vec3 a = vert_table[t.a];
+    vec3 b = vert_table[t.b];
+    vec3 c = vert_table[t.c];
 
     normalArray[j * 3 + 0] = N[t.a].x;
     normalArray[j * 3 + 1] = N[t.a].y;
@@ -221,6 +233,9 @@ void setup_programs()
   // Note that we print a messahe before calling it because it
   // prints out the GLSL compiler and linker messages - this is a way to know
   // which of your shaders/programs has a problem.
+  cout << "Creating the cube program..." << endl;
+  cube_program = createProgram("shaders/vsh_cube.glsl","shaders/fsh_cube.glsl");
+
 
   cout << "Creating input program..." << endl;
   // TODO: use logic to determine which fragment program to load: flat, gorroud, or phong
@@ -237,11 +252,6 @@ void draw()
   // ensure we're drawing to the correct GLUT window 
   glutSetWindow(wid);
 
-
-  // TODO: do something with this? 
-  // rotation angle
-  static GLfloat angle = 0.0;
-
   // clear buffers
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -255,21 +265,26 @@ void draw()
   // Compute projection matrix; perspective() is a glm function
   // Arguments: field of view in DEGREES(!), aspect ratio (1 if square window), distance to front and back clipping plane
   // Camera is located at the origin and points along -Z direction
-  // TODO: make this correct
-  mat4 P = perspective(float(15.0f,1.0f,18.0f,22.0f);
+  GLfloat fov_angle = 10.0f;
+  GLfloat view_distance = 1.f / float(tan((fov_angle * M_PI / 180.f) /  2.0f));
+  mat4 P = perspective(fov_angle,1.0f, view_distance - 1.f, view_distance + 3.f);
 
-  // TODO: make this correct
-  // Add in the user interface absolut rotation matrix R_trackball and intermediate rotation R_trackball_0
+  // 1) translate mesh to origin
+  // 2) scale to a (-1,1) box
+  // 3) apply rotations
+  // 4) translate away from view point
+
   GLfloat x_trans = (x_min + x_max) / -2.f;
   GLfloat y_trans = (y_min + y_max) / -2.f;
   GLfloat z_trans = (z_min + z_max) / -2.f;
   mat4 normalize_translate = translate(mat4(),vec3(x_trans, y_trans, z_trans));
 
-  GLfloat scale_factor = fmax(fmax(x_max - x_min, y_max - y_min), z_max - z_min);
+  GLfloat scale_factor = 2.0f / fmax(fmax(x_max - x_min, y_max - y_min), z_max - z_min);
   mat4 normalize_scale = scale(mat4(), vec3(scale_factor, scale_factor, scale_factor));
-  
-  mat4 MV = R_trackball_0 * R_trackball * normalize_scale * normalize_translate;
 
+  mat4 view_translate = translate(mat4(), vec3(0.f, 0.f, -1 - view_distance));
+
+  mat4 MV = view_translate * R_trackball_0 * R_trackball * normalize_scale * normalize_translate;
   //=============== Input Program ================
 
   input_program->setUniform("MV",&MV[0][0]);
@@ -277,9 +292,38 @@ void draw()
 
   input_program->on();
 
-  va_input->sendToPipeline(GL_TRIANGLES, 0, number_of_triangles);
+  va_input->sendToPipeline(GL_TRIANGLES, 0, 3 * number_of_vertices);
 
   input_program->off();
+
+    cube_program->setUniform("MV",&MV[0][0]);
+  cube_program->setUniform("P",&P[0][0]);
+
+  // Turn on cube program
+  cube_program->on();
+
+  // send translation values - this will move the cube so that it is centered at the center of the square
+  // Note that you can also send a 3D vector to a uniform vec3 type variable using the setUniform method.
+  //  Just use 3 values instead of 2 to do that.
+  cube_program->setUniform("T",0.8f,0.8f);
+
+  // Send vertices 0...36 to the pipeline. In this case, we use `plain' rendering with no index
+  // This means that 36 vertices are going to be formed from contents of the buffers attached 
+  // to the vertex array va_cube 
+  va_cube->sendToPipeline(GL_TRIANGLES,0,36);
+  
+  // ... now render three cubes centered at the other vertices of the square
+  cube_program->setUniform("T",-0.8f,0.8f);
+  va_cube->sendToPipeline(GL_TRIANGLES,0,36);
+
+  cube_program->setUniform("T",0.8f,-0.8f);
+  va_cube->sendToPipeline(GL_TRIANGLES,0,36);
+
+  cube_program->setUniform("T",-0.8f,-0.8f);
+  va_cube->sendToPipeline(GL_TRIANGLES,0,36);
+
+  // turn off program
+  cube_program->off();
  
   // make sure all the stuff is drawn
   glFlush();
@@ -425,9 +469,9 @@ GLvoid button_motion(GLint mx, GLint my)
 
 // TODO: you'll need to change this one as well...
 
-static const int MENU_SLOWER = 1;
-static const int MENU_FASTER = 2;
-static const int MENU_STOP_RUN = 3;
+static const int MENU_FLAT = 1;
+static const int MENU_GOURAUD = 2;
+static const int MENU_PHONG = 3;
 
 void menu ( int value )
 {
@@ -436,20 +480,14 @@ void menu ( int value )
 
   switch(value)
     {
-    case MENU_SLOWER:
-      multiplier *= 0.6;
+    case MENU_FLAT:
+      // TODO: create program with flat shading
       break;
-    case MENU_FASTER:
-      multiplier *= 1.4;
+    case MENU_GOURAUD:
+      // TODO: create program with gouraud shading
       break;
-    case MENU_STOP_RUN:
-      animate = !animate;
-      
-      // this is to make sure that when animation is off, things don't move even if
-      //  glutPostRedisplay comes up somewhere (e.g. in a mouse event)
-      swap(dcounter,stored_dcounter);
-      swap(multiplier,stored_multiplier);
-
+    case MENU_PHONG:
+      // TODO: create program with phong shading
       break;
     }
 
@@ -468,16 +506,9 @@ void keyboard(GLubyte key, GLint x, GLint y)
     
     // clean up and exit
     // you may remove these deletes and let the OS do the work
-
-    delete va_square;
-    delete ix_square;
-    delete va_cube;
-    delete square_program;
-    delete cube_program;
+    delete va_input;
     delete input_program;
-    delete buf_square_vertices;
-    delete buf_cube_vertices;
-    delete buf_cube_faceId;
+
 
     exit(0);
 
@@ -552,9 +583,9 @@ GLint init_glut(GLint *argc, char **argv)
   /* create menu */
   // you'll need to change this to build your menu
   GLint menuID = glutCreateMenu(menu);
-  glutAddMenuEntry("slower",MENU_SLOWER);
-  glutAddMenuEntry("faster",MENU_FASTER);
-  glutAddMenuEntry("stop/run",MENU_STOP_RUN);
+  glutAddMenuEntry("Flat",MENU_FLAT);
+  glutAddMenuEntry("Gouraud",MENU_GOURAUD);
+  glutAddMenuEntry("Phong",MENU_PHONG);
   glutSetMenu(menuID);
   glutAttachMenu(GLUT_RIGHT_BUTTON);
 
@@ -582,7 +613,6 @@ GLint main(GLint argc, char **argv)
 
   // initialize programs and buffers
   setup_programs();
-  setup_buffers();
   setup_input_buffers();
 
   // Main loop: keep processing events.
