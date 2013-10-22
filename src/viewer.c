@@ -49,10 +49,13 @@ float x_max, y_max, z_max;
 VertexArray *va_input = NULL;
 Buffer *buf_input_locations = NULL;
 Buffer *buf_input_normals = NULL;
-Program *input_program = NULL;
+Program *input_program_flat = NULL;
+Program *input_program_gouraud = NULL;
+Program *input_program_phong = NULL;
 
 
-//cube
+//=================cube vars===============
+
 GLfloat cube_vertices[] = {
 
   0,1,0,  0,0,0,  0,0,1,
@@ -86,6 +89,9 @@ VertexArray *va_cube = NULL;
 Buffer *buf_cube_vertices = NULL;
 Buffer *buf_cube_faceId = NULL;
 Program *cube_program = NULL;
+
+//=================cube vars===============
+
 
 /* ----------------------------------------------------- */
 
@@ -237,9 +243,11 @@ void setup_programs()
   cube_program = createProgram("shaders/vsh_cube.glsl","shaders/fsh_cube.glsl");
 
 
-  cout << "Creating input program..." << endl;
+  cout << "Creating input programs..." << endl;
   // TODO: use logic to determine which fragment program to load: flat, gorroud, or phong
-  input_program = createProgram("shaders/vsh_input.glsl", "shaders/fsh_input.glsl");
+  input_program_flat = createProgram("shaders/vsh_input_flat.glsl", "shaders/fsh_input_flat.glsl");
+  input_program_gouraud = createProgram("shaders/vsh_input_gouraud.glsl", "shaders/fsh_input_gouraud.glsl");
+  input_program_phong = createProgram("shaders/vsh_input_phong.glsl", "shaders/fsh_input_phong.glsl");
 }
 
 /* ----------------------------------------------------- */
@@ -285,18 +293,60 @@ void draw()
   mat4 view_translate = translate(mat4(), vec3(0.f, 0.f, -1 - view_distance));
 
   mat4 MV = view_translate * R_trackball_0 * R_trackball * normalize_scale * normalize_translate;
+  
+
   //=============== Input Program ================
 
-  input_program->setUniform("MV",&MV[0][0]);
-  input_program->setUniform("P",&P[0][0]);
+    switch(SHADER)
+    {
+    case MENU_FLAT:
+      input_program_flat->setUniform("MV",&MV[0][0]);
+      input_program_flat->setUniform("P",&P[0][0]);
 
-  input_program->on();
+      input_program_flat->on();
 
-  va_input->sendToPipeline(GL_TRIANGLES, 0, 3 * number_of_vertices);
+      va_input->sendToPipeline(GL_TRIANGLES, 0, number_of_vertices);
 
-  input_program->off();
+      input_program_flat->off();
+      break;
+    case MENU_GOURAUD:
+      input_program_gouraud->setUniform("MV",&MV[0][0]);
+      input_program_gouraud->setUniform("P",&P[0][0]);
 
-    cube_program->setUniform("MV",&MV[0][0]);
+      input_program_gouraud->on();
+
+      va_input->sendToPipeline(GL_TRIANGLES, 0, number_of_vertices);
+
+      input_program_gouraud->off();
+      break;
+    case MENU_PHONG:
+      input_program_phong->setUniform("MV",&MV[0][0]);
+      input_program_phong->setUniform("P",&P[0][0]);
+
+      input_program_phong->on();
+
+      va_input->sendToPipeline(GL_TRIANGLES, 0, number_of_vertices);
+
+      input_program_phong->off();
+      break;
+    default:
+      input_program_flat->setUniform("MV",&MV[0][0]);
+      input_program_flat->setUniform("P",&P[0][0]);
+
+      input_program_flat->on();
+
+      va_input->sendToPipeline(GL_TRIANGLES, 0, number_of_vertices);
+
+      input_program_flat->off();
+      break;
+    }
+
+  //=============== Input Program ================
+
+
+  //=============== Cube Program ================
+
+  cube_program->setUniform("MV",&MV[0][0]);
   cube_program->setUniform("P",&P[0][0]);
 
   // Turn on cube program
@@ -324,7 +374,10 @@ void draw()
 
   // turn off program
   cube_program->off();
- 
+
+  //=============== Cube Program ================
+
+
   // make sure all the stuff is drawn
   glFlush();
 
@@ -472,6 +525,7 @@ GLvoid button_motion(GLint mx, GLint my)
 static const int MENU_FLAT = 1;
 static const int MENU_GOURAUD = 2;
 static const int MENU_PHONG = 3;
+int SHADER = MENU_FLAT;
 
 void menu ( int value )
 {
@@ -481,13 +535,13 @@ void menu ( int value )
   switch(value)
     {
     case MENU_FLAT:
-      // TODO: create program with flat shading
+      SHADER = MENU_FLAT;
       break;
     case MENU_GOURAUD:
-      // TODO: create program with gouraud shading
+      SHADER = MENU_GOURAUD;
       break;
     case MENU_PHONG:
-      // TODO: create program with phong shading
+      SHADER = MENU_PHONG;
       break;
     }
 

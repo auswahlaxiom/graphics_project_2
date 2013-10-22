@@ -8,7 +8,11 @@
 /* in the CPU code                                */
 /* ---------------------------------------------- */
 
-layout (location=0) in vec2 model_coord;
+// vertices in model coordinates - normalized from -1 to 1 in x, y, z
+layout (location=0) in vec3 coord;
+
+// Normals
+layout (location=1) in vec3 norm;
 
 
 
@@ -19,12 +23,7 @@ layout (location=0) in vec2 model_coord;
 /* fragments to the fragment shader               */
 /* ---------------------------------------------- */
 
-// x- and y- coordinates scaled to 0...1
-//  use default interpolation = perspectively correct
-//  basically, interpolated values will be linear
-//  functions varying from 0...1 on the 3D quad
-
-out vec2 param;
+// TODO: pass interpolated normals
 
 
 
@@ -39,7 +38,7 @@ out vec2 param;
 /* ---------------------------------------------- */
 
 uniform mat4 MV;  // modelview matrix in homogenous coordinates
-uniform mat4 P;  // projection matrix in homogenous coordinates
+uniform mat4 P;   // projection matrix in homogenous coordinates
 
 
 
@@ -50,19 +49,18 @@ uniform mat4 P;  // projection matrix in homogenous coordinates
 /* and values of the output variables             */
 /* ---------------------------------------------- */
 
-
 void main()
 {
-  vec3 scaled_coords = vec3(0.8*model_coord,0);
+  // TODO: pass interpolated normals to frag shader
+
+  vec4 worldCoord = MV * vec4(coord,1.0);
 
 
-  // vertices of the square scaled to 0...1
 
-  param = 0.5*(model_coord+vec2(1,1));
+  // apply projection to location in the world coordinates
+  // gl_Position is a built-in output variable of type vec4
+  // note that NO DIVISION by the homogenous coordinate is done here - 
+  //   this is what is supposed to happen (don't do it!)
 
-
-  // gl_Position holds the coordinates of the processed vertex
-  //  in homogenous coordinates (vec4 type)
-
-  gl_Position = P * MV * vec4(scaled_coords,1);
+  gl_Position = P * worldCoord;
 }
