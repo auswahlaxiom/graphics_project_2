@@ -41,92 +41,9 @@ mat4 R_trackball_0; //the rotation that is currently being specified using the t
 
 // Input mesh info
 int number_of_triangles, number_of_vertices;
-/* ----------------------------------------------------- */
+float x_min, y_min, z_min;
+float x_max, y_max, z_max;
 
-// Here are desired buffer contents for a square extending from -1 to 1 in x and y.
-// The square will be rendered using index buffer.
-// Note that we are specifying only x and y coordinates,
-// but the z-coordinate will be added on the vertex processing stage.
-
-GLfloat square_vertices[] = {
-  -1, -1,
-  -1,  1,
-   1,  1,
-   1, -1,
-};
-
-// Vertex indices.
-// In this case, it would be easy to form a triangle strip 
-// using only 4 vertex indices, but in the project you'll be using 
-// triangle soup, so this is what we'll do here.
-
-// IMPORTANT: you MUST use an unsigned type for index buffer data.
-
-GLuint square_indices[] = {
-  0, 1, 2,   // indices into the vertices of the first triangle
-  0, 2, 3    // ... and second triangle (with consistent orientation)
-};
-
-/* ----------------------------------------------------- */
-
-// Data for a cube extending from 0 to 1 in x y z.
-// The cube will be rendered using plain vertex array.
-
-GLfloat cube_vertices[] = {
-
-  0,1,0,  0,0,0,  0,0,1,
-  0,1,0,  0,0,1,  0,1,1,  // face 000 - 010 - 001 - 011
-
-  0,0,1,  0,0,0,  1,0,0,
-  0,0,1,  1,0,0,  1,0,1,  // face 000 - 100 - 001 - 101
-
-  0,0,0,  0,1,0,  1,1,0,
-  0,0,0,  1,1,0,  1,0,0,  // another face ....
-
-  1,0,1,  1,0,0,  1,1,0,
-  1,1,0,  1,1,1,  1,0,1,
-
-  1,1,0,  0,1,0,  0,1,1,
-  0,1,1,  1,1,1,  1,1,0,
-
-  1,1,1,  0,1,1,  0,0,1,
-  0,0,1,  1,0,1,  1,1,1
-};
-  
-// This is an attribute that represents which face a vertex belongs to.
-// In our triangulation of the cube, we render any of its
-// faces as two triangles; thus first six vertices in the 
-// cube_vertices array above represent the 0th face;
-// the following six vertices represent 1st face etc.
-
-// Alternatively, this could be done using the GLSL built-in
-// variable gl_PrimitiveId, http://www.opengl.org/sdk/docs/manglsl/xhtml/gl_PrimitiveID.xml
-// but this is a more flexible approach that you can use to pass
-// other information from C code to the GPU code.
-
-GLubyte cube_faceId[] = {
-  0,0,0,0,0,0,
-  1,1,1,1,1,1,
-  2,2,2,2,2,2,
-  3,3,3,3,3,3,
-  4,4,4,4,4,4,
-  5,5,5,5,5,5
-};
-
-/* ----------------------------------------------------- */
-
-// all buffer and program objects used 
-
-VertexArray *va_square = NULL;
-Buffer *buf_square_vertices = NULL;
-IndexBuffer *ix_square = NULL;
-
-VertexArray *va_cube = NULL;
-Buffer *buf_cube_vertices = NULL;
-Buffer *buf_cube_faceId = NULL;
-
-Program *square_program = NULL;
-Program *cube_program = NULL;
 
 //Input file objects
 VertexArray *va_input = NULL;
@@ -181,8 +98,33 @@ void setup_input_buffers()
   for (int i=0; i<number_of_triangles; i++ )
     ifs >> tri_table[i].a >> tri_table[i].b >> tri_table[i].c;
   
-  for (int i=0; i<number_of_vertices; i++ )
+  for (int i=0; i<number_of_vertices; i++ ) {
     ifs >> vert_table[i].x >> vert_table[i].y >> vert_table[i].z;
+    if (i == 0) {
+      x_min = x_max = vert_table[0].x;
+      y_min = y_max = vert_table[0].y;
+      z_min = z_max = vert_table[0].z;
+    } else {
+      if (x_min > vert_table[i].x) {
+        x_min = vert_table[i].x;
+      }
+      if (y_min > vert_table[i].y) {
+        y_min = vert_table[i].y;
+      }
+      if (z_min > vert_table[i].z) {
+        z_min = vert_table[i].z;
+      }
+      if (x_max < vert_table[i].x) {
+        x_max = vert_table[i].x;
+      }
+      if (y_max < vert_table[i].y) {
+        y_max = vert_table[i].y;
+      }
+      if (z_max < vert_table[i].z) {
+        z_max = vert_table[i].z;
+      }
+    }
+  }
 
   vec3*vertex_soup = new vec3[number_of_triangles * 3];
   for (int i = 0; i < number_of_triangles; i++) {
@@ -262,8 +204,8 @@ void setup_input_buffers()
   buf_input_normals   = new Buffer(3, number_of_vertices, normalArray);
 
   va_input = new VertexArray;
-  va_cube->attachAttribute(0,buf_input_locations);
-  va_cube->attachAttribute(1,buf_input_normals);
+  va_input->attachAttribute(0,buf_input_locations);
+  va_input->attachAttribute(1,buf_input_normals);
 
   cout << "Finished attatching buffers to input vertex array." << endl;
 }
@@ -280,20 +222,13 @@ void setup_programs()
   // prints out the GLSL compiler and linker messages - this is a way to know
   // which of your shaders/programs has a problem.
 
-  cout << "Creating the cube program..." << endl;
-  cube_program = createProgram("shaders/vsh_cube.glsl","shaders/fsh_cube.glsl");
-  cout << "Creating the square program..." << endl;
-  square_program = createProgram("shaders/vsh_square.glsl","shaders/fsh_square.glsl");
-
   cout << "Creating input program..." << endl;
+  // TODO: use logic to determine which fragment program to load: flat, gorroud, or phong
   input_program = createProgram("shaders/vsh_input.glsl", "shaders/fsh_input.glsl");
 }
 
 /* ----------------------------------------------------- */
 
-bool animate = false;    // animate or not
-float multiplier = 1.0; // controls rotation speed
-int dcounter = 1;       // used to increment the frame counter (set to zero to freeze)
 
 /* ----------------------------------------------------- */
 
@@ -302,100 +237,46 @@ void draw()
   // ensure we're drawing to the correct GLUT window 
   glutSetWindow(wid);
 
-  // frame counter for zoom animation
-  static int counter = 0;
-  counter += dcounter;
 
+  // TODO: do something with this? 
   // rotation angle
   static GLfloat angle = 0.0;
-  angle += multiplier;
 
   // clear buffers
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  // want to disable culling for square - it's not a watertight surface
-  //  what would happen if you enable it?
-//  glDisable(GL_CULL_FACE);
 
   // want to use depth test to get visibility right
   glEnable(GL_DEPTH_TEST);
 
+  // Use culling on 3D, water tight inputs
+  glEnable(GL_CULL_FACE);
+
   // Compute projection matrix; perspective() is a glm function
   // Arguments: field of view in DEGREES(!), aspect ratio (1 if square window), distance to front and back clipping plane
   // Camera is located at the origin and points along -Z direction
-  mat4 P = perspective(float(1.0+0.5*sin(counter/100.0))*10.0f,1.0f,18.0f,22.0f);
+  // TODO: make this correct
+  mat4 P = perspective(float(15.0f,1.0f,18.0f,22.0f);
 
-  // we'll use this as rotation component of the modelview matrix
-  mat4 R_animation = rotate(mat4(),angle,vec3(1.0f,2.0f,0.0f));
-
-  // this is technically a part of the modelview matrix - it rotates around the axis [0,0,20]
-  //  and then moves "forward", i.e. along -Z, by 20 units
+  // TODO: make this correct
   // Add in the user interface absolut rotation matrix R_trackball and intermediate rotation R_trackball_0
-  mat4 MV = translate(mat4(),vec3(0.0f,0.0f,-20.0f)) * R_trackball_0 * R_trackball * R_animation;
+  GLfloat x_trans = (x_min + x_max) / -2.f;
+  GLfloat y_trans = (y_min + y_max) / -2.f;
+  GLfloat z_trans = (z_min + z_max) / -2.f;
+  mat4 normalize_translate = translate(mat4(),vec3(x_trans, y_trans, z_trans));
 
-  // send matrices P and MV into uniform variables of the program used to render square
-  // &P[0][0] is the pointer to the entries of matrix P, same for MV
-  // Note that it's a coincidence that uniform names are the same as CPU code variable names 
-  //    - they don't have to be the same
-  square_program->setUniform("P",&P[0][0]);
-  square_program->setUniform("MV",&MV[0][0]);
-
-  // // turn on the square program...
-  // square_program->on();
-
-  // // Send vertices 0...5 to pipeline; use the index buffer ix_square.
-  // // Recall that ix_square contains 0 1 2 0 2 3, which means that 
-  // // vertices with data at indices 0 1 2 0 2 3 in the buffers attached to the 
-  // // vertex array are going to be generated.
-  // // The first argument instructs the pipeline how to set up triangles; GL_TRIANGLES=triangle soup
-  // va_square->sendToPipelineIndexed(GL_TRIANGLES,ix_square,0,6);
-
-  // // turn the program off
-  // square_program->off();
-
-  // // OK to enable culling now: we'll be drawing cubes
-  // glEnable(GL_CULL_FACE);
-
-  // // We must to send the matrices again: this time to the cube program.
-  // // Different programs generally maintain independent sets of uniforms.
-  // // A more elegant and less wasteful way to do this could be based on GLSL subroutines.
-  // cube_program->setUniform("MV",&MV[0][0]);
-  // cube_program->setUniform("P",&P[0][0]);
-
-  // // Turn on cube program
-  // cube_program->on();
-
-  // // send translation values - this will move the cube so that it is centered at the center of the square
-  // // Note that you can also send a 3D vector to a uniform vec3 type variable using the setUniform method.
-  // //  Just use 3 values instead of 2 to do that.
-  // cube_program->setUniform("T",0.8f,0.8f);
-
-  // // Send vertices 0...36 to the pipeline. In this case, we use `plain' rendering with no index
-  // // This means that 36 vertices are going to be formed from contents of the buffers attached 
-  // // to the vertex array va_cube 
-  // va_cube->sendToPipeline(GL_TRIANGLES,0,36);
+  GLfloat scale_factor = fmax(fmax(x_max - x_min, y_max - y_min), z_max - z_min);
+  mat4 normalize_scale = scale(mat4(), vec3(scale_factor, scale_factor, scale_factor));
   
-  // // ... now render three cubes centered at the other vertices of the square
-  // cube_program->setUniform("T",-0.8f,0.8f);
-  // va_cube->sendToPipeline(GL_TRIANGLES,0,36);
+  mat4 MV = R_trackball_0 * R_trackball * normalize_scale * normalize_translate;
 
-  // cube_program->setUniform("T",0.8f,-0.8f);
-  // va_cube->sendToPipeline(GL_TRIANGLES,0,36);
-
-  // cube_program->setUniform("T",-0.8f,-0.8f);
-  // va_cube->sendToPipeline(GL_TRIANGLES,0,36);
-
-  // // turn off program
-  // cube_program->off();
-
-//=============== Input Program ================
+  //=============== Input Program ================
 
   input_program->setUniform("MV",&MV[0][0]);
   input_program->setUniform("P",&P[0][0]);
 
   input_program->on();
 
-  input_program->setUniform("T",0.8f,0.8f);
   va_input->sendToPipeline(GL_TRIANGLES, 0, number_of_triangles);
 
   input_program->off();
@@ -406,13 +287,6 @@ void draw()
   // this exchanges the invisible back buffer with the visible buffer to 
   //  avoid refresh artifacts
   glutSwapBuffers();
-
-  // Request another call to draw() in the "animation" mode.
-  // Note that in the viewer you'll be implementing you may not need this - 
-  //  all you have to do is to make sure the image is redrawn when rendering parameters change,
-  //  e.g. as a result of mouse events.
-  if (animate) 
-    glutPostRedisplay();
 }
 
 
@@ -549,7 +423,7 @@ GLvoid button_motion(GLint mx, GLint my)
 
 /* menu callback */
 
-// you'll need to change this one as well...
+// TODO: you'll need to change this one as well...
 
 static const int MENU_SLOWER = 1;
 static const int MENU_FASTER = 2;
@@ -600,6 +474,7 @@ void keyboard(GLubyte key, GLint x, GLint y)
     delete va_cube;
     delete square_program;
     delete cube_program;
+    delete input_program;
     delete buf_square_vertices;
     delete buf_cube_vertices;
     delete buf_cube_faceId;
@@ -648,7 +523,7 @@ GLint init_glut(GLint *argc, char **argv)
   glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
 
   /* create a GLUT window (not drawn until glutMainLoop() is entered) */
-  id = glutCreateWindow("MACS441 OpenGL Sample code");    
+  id = glutCreateWindow("Zach Fleischman CSCI441 Project 2");    
 
   /* register callbacks */
 
