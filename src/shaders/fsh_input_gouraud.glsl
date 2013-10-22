@@ -6,8 +6,23 @@
 /* and interpolated on the rasterization stage    */
 /* ---------------------------------------------- */
 
-  // TODO: recieve interpolated normals from vsh
+noperspective in float NdotL; // interpolated input from vertex processing
 
+
+
+/* ------------- UNIFORM VARIABLES -------------- */
+/* This is `global state' that every invocation   */
+/* of the shader has access to.                   */
+/* Note that these variables can also be declared */
+/* in the fragment shader if necessary.           */
+/* If the names are the same, the same value will */
+/* be seen in both shaders.                       */
+/* ---------------------------------------------- */
+
+
+uniform float LightIntensity;
+uniform float AmbientIntensity;
+uniform vec3 DiffuseAndAmbientCoefficient;
 
 
 /* ----------- OUTPUT VARIABLES ----------------- */
@@ -28,5 +43,6 @@ out vec3 fragcolor;
 void main()
 {
 
-  fragcolor = vec3(0.5,0.1,0.7);
+  fragcolor = vec3((LightIntensity * (NdotL > 0.0f ? NdotL : 0.0f) + AmbientIntensity) * DiffuseAndAmbientCoefficient);
 }
+

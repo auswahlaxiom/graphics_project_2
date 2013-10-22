@@ -23,7 +23,8 @@ layout (location=1) in vec3 norm;
 /* fragments to the fragment shader               */
 /* ---------------------------------------------- */
 
-// TODO: pass interpolated normals
+//flat dot products
+flat out float NdotL;
 
 
 
@@ -39,6 +40,8 @@ layout (location=1) in vec3 norm;
 
 uniform mat4 MV;  // modelview matrix in homogenous coordinates
 uniform mat4 P;   // projection matrix in homogenous coordinates
+uniform mat4 NM;  // normal matrix 
+uniform vec3 LL;  // light location
 
 
 
@@ -51,11 +54,14 @@ uniform mat4 P;   // projection matrix in homogenous coordinates
 
 void main()
 {
-  // TODO: pass interpolated normals to frag shader
-
   vec4 worldCoord = MV * vec4(coord,1.0);
 
+  vec3 L = normalize(LL - worldCoord.xyz);
 
+  vec3 N = normalize( -(NM * vec4(norm, 1.0)).xyz );
+
+  // Set N dot L for fragment program
+  NdotL = dot(N,L);
 
   // apply projection to location in the world coordinates
   // gl_Position is a built-in output variable of type vec4

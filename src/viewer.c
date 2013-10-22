@@ -53,61 +53,31 @@ Program *input_program_flat = NULL;
 Program *input_program_gouraud = NULL;
 Program *input_program_phong = NULL;
 
+/*--------Menu Options----------*/
+static const int MENU_FLAT = 1;
+static const int MENU_GOURAUD = 2;
+static const int MENU_PHONG = 3;
+int SHADER = MENU_FLAT;
 
-//=================cube vars===============
 
-GLfloat cube_vertices[] = {
-
-  0,1,0,  0,0,0,  0,0,1,
-  0,1,0,  0,0,1,  0,1,1,  // face 000 - 010 - 001 - 011
-
-  0,0,1,  0,0,0,  1,0,0,
-  0,0,1,  1,0,0,  1,0,1,  // face 000 - 100 - 001 - 101
-
-  0,0,0,  0,1,0,  1,1,0,
-  0,0,0,  1,1,0,  1,0,0,  // another face ....
-
-  1,0,1,  1,0,0,  1,1,0,
-  1,1,0,  1,1,1,  1,0,1,
-
-  1,1,0,  0,1,0,  0,1,1,
-  0,1,1,  1,1,1,  1,1,0,
-
-  1,1,1,  0,1,1,  0,0,1,
-  0,0,1,  1,0,1,  1,1,1
-};
-
-GLubyte cube_faceId[] = {
-  0,0,0,0,0,0,
-  1,1,1,1,1,1,
-  2,2,2,2,2,2,
-  3,3,3,3,3,3,
-  4,4,4,4,4,4,
-  5,5,5,5,5,5
-};
-VertexArray *va_cube = NULL;
-Buffer *buf_cube_vertices = NULL;
-Buffer *buf_cube_faceId = NULL;
-Program *cube_program = NULL;
-
-//=================cube vars===============
+/*--------Utility----------*/
+// print out matrix by rows
+void printMat(glm::mat4  mat){
+  int i,j;
+  for (j=0; j<4; j++){
+    for (i=0; i<4; i++){
+    printf("%f ",mat[i][j]);
+  }
+  printf("\n");
+ }
+}
 
 
 /* ----------------------------------------------------- */
 
 void setup_input_buffers()
 {
-  //==========cube===========
-  buf_cube_vertices = new Buffer(3,36,cube_vertices);
-  buf_cube_faceId = new Buffer(1,36,cube_faceId);
-    va_cube = new VertexArray;
-  // vertices are attribute #0
-  va_cube->attachAttribute(0,buf_cube_vertices);
-  // vertices are attribute #1
-  va_cube->attachAttribute(1,buf_cube_faceId);
-  //==========cube===========
-
-  ifstream ifs("inputs/cow.t");
+  ifstream ifs("inputs/bunny2.t");
 
   ifs >> number_of_triangles >> number_of_u_vertices;
   number_of_vertices = number_of_triangles * 3;
@@ -239,9 +209,6 @@ void setup_programs()
   // Note that we print a messahe before calling it because it
   // prints out the GLSL compiler and linker messages - this is a way to know
   // which of your shaders/programs has a problem.
-  cout << "Creating the cube program..." << endl;
-  cube_program = createProgram("shaders/vsh_cube.glsl","shaders/fsh_cube.glsl");
-
 
   cout << "Creating input programs..." << endl;
   // TODO: use logic to determine which fragment program to load: flat, gorroud, or phong
@@ -269,12 +236,14 @@ void draw()
 
   // Use culling on 3D, water tight inputs
   glEnable(GL_CULL_FACE);
+  glCullFace(GL_FRONT);
 
   // Compute projection matrix; perspective() is a glm function
   // Arguments: field of view in DEGREES(!), aspect ratio (1 if square window), distance to front and back clipping plane
   // Camera is located at the origin and points along -Z direction
   GLfloat fov_angle = 10.0f;
   GLfloat view_distance = 1.f / float(tan((fov_angle * M_PI / 180.f) /  2.0f));
+
   mat4 P = perspective(fov_angle,1.0f, view_distance - 1.f, view_distance + 3.f);
 
   // 1) translate mesh to origin
@@ -292,91 +261,59 @@ void draw()
 
   mat4 view_translate = translate(mat4(), vec3(0.f, 0.f, -1 - view_distance));
 
+  // vsh uniforms (including P from above)
   mat4 MV = view_translate * R_trackball_0 * R_trackball * normalize_scale * normalize_translate;
+
+  mat4 NM = R_trackball_0 * R_trackball; // Normal matrix is just the rotation, normals aren't affected by trans and are normalized
+
+  vec3 LL = vec3(0.0f, 0.0f, 0.0f); // A lightsource in front of and to the upper right of the model
+
+  // fsh uniforms
+  GLfloat LightIntensity = 0.7f;
+  GLfloat AmbientIntensity = 0.3f;
+  vec3 DiffuseAndAmbientCoefficient = vec3(0.2f, 0.6f, 0.1f);
   
 
   //=============== Input Program ================
-
+  Program *input_program; 
     switch(SHADER)
     {
     case MENU_FLAT:
-      input_program_flat->setUniform("MV",&MV[0][0]);
-      input_program_flat->setUniform("P",&P[0][0]);
-
-      input_program_flat->on();
-
-      va_input->sendToPipeline(GL_TRIANGLES, 0, number_of_vertices);
-
-      input_program_flat->off();
+      cout << "Running flat program" << endl;
+      input_program = input_program_flat;
       break;
     case MENU_GOURAUD:
-      input_program_gouraud->setUniform("MV",&MV[0][0]);
-      input_program_gouraud->setUniform("P",&P[0][0]);
-
-      input_program_gouraud->on();
-
-      va_input->sendToPipeline(GL_TRIANGLES, 0, number_of_vertices);
-
-      input_program_gouraud->off();
+      cout << "Running Gouraud program" << endl;
+      input_program = input_program_gouraud;
       break;
     case MENU_PHONG:
-      input_program_phong->setUniform("MV",&MV[0][0]);
-      input_program_phong->setUniform("P",&P[0][0]);
-
-      input_program_phong->on();
-
-      va_input->sendToPipeline(GL_TRIANGLES, 0, number_of_vertices);
-
-      input_program_phong->off();
+      cout << "Running Phong program" << endl;
+      input_program = input_program_phong;
       break;
     default:
-      input_program_flat->setUniform("MV",&MV[0][0]);
-      input_program_flat->setUniform("P",&P[0][0]);
-
-      input_program_flat->on();
-
-      va_input->sendToPipeline(GL_TRIANGLES, 0, number_of_vertices);
-
-      input_program_flat->off();
+      cout << "Invalid shader selected. Running flat program" << endl;
+      input_program = input_program_flat;
       break;
     }
 
+    // Vertex program uniforms
+    input_program->setUniform("MV",&MV[0][0]);
+    input_program->setUniform("P",&P[0][0]);
+    input_program->setUniform("NM", &NM[0][0]);
+    input_program->setUniform("LL", &LL[0]);
+
+    // Fragment program uniforms
+    input_program->setUniform("LightIntensity", &LightIntensity);
+    input_program->setUniform("AmbientIntensity", &AmbientIntensity);
+    input_program->setUniform("DiffuseAndAmbientCoefficient", &DiffuseAndAmbientCoefficient[0]);
+
+    input_program->on();
+
+    va_input->sendToPipeline(GL_TRIANGLES, 0, number_of_vertices);
+
+    input_program->off();
+
   //=============== Input Program ================
-
-
-  //=============== Cube Program ================
-
-  cube_program->setUniform("MV",&MV[0][0]);
-  cube_program->setUniform("P",&P[0][0]);
-
-  // Turn on cube program
-  cube_program->on();
-
-  // send translation values - this will move the cube so that it is centered at the center of the square
-  // Note that you can also send a 3D vector to a uniform vec3 type variable using the setUniform method.
-  //  Just use 3 values instead of 2 to do that.
-  cube_program->setUniform("T",0.8f,0.8f);
-
-  // Send vertices 0...36 to the pipeline. In this case, we use `plain' rendering with no index
-  // This means that 36 vertices are going to be formed from contents of the buffers attached 
-  // to the vertex array va_cube 
-  va_cube->sendToPipeline(GL_TRIANGLES,0,36);
-  
-  // ... now render three cubes centered at the other vertices of the square
-  cube_program->setUniform("T",-0.8f,0.8f);
-  va_cube->sendToPipeline(GL_TRIANGLES,0,36);
-
-  cube_program->setUniform("T",0.8f,-0.8f);
-  va_cube->sendToPipeline(GL_TRIANGLES,0,36);
-
-  cube_program->setUniform("T",-0.8f,-0.8f);
-  va_cube->sendToPipeline(GL_TRIANGLES,0,36);
-
-  // turn off program
-  cube_program->off();
-
-  //=============== Cube Program ================
-
 
   // make sure all the stuff is drawn
   glFlush();
@@ -413,17 +350,20 @@ GLint j_0 = -1;
 void sphere_coordinates(GLint i, GLint j, GLfloat& x, GLfloat& y, GLfloat& z)
 {
   GLfloat d = (GLfloat) VPD_DEFAULT; //screen resolution
-  x = 2.0 * (GLfloat)i / (d - 1.0) - 1.0; //translate i to world coordinates
-  y = -1.0 * (2.0 * (GLfloat)j / (d - 1.0) - 1.0); //translate j to world coordinates
-  if (sqrt(pow(x,2) + pow(y,2)) >= 1.0) {
+  x = 2.0f * (GLfloat)i / (d - 1.0f) - 1.0f; //translate i to world coordinates
+  y = -1.0f * (2.0f * (GLfloat)j / (d - 1.0f) - 1.0f); //translate j to world coordinates
+  if (sqrt(pow(x,2) + pow(y,2)) >= 1.0f) {
     //we are outside circle
-    x = x / sqrt(pow(x,2) + pow(y,2));
-    y = y / sqrt(pow(x,2) + pow(y,2));
-    z = 0;
+    GLfloat x_normal = x / sqrt(pow(x,2) + pow(y,2));
+    GLfloat y_normal = y / sqrt(pow(x,2) + pow(y,2));
+    x = x_normal;
+    y = y_normal;
+    z = 0.0f;
   } else {
     //we are inside circle
-    z = sqrt(1.0 - pow(x, 2) - pow(y,2));
+    z = sqrt(1.0f - pow(x, 2) - pow(y,2));
   }
+  //cout << "x: " << x << endl << "y: " << y << endl << "z: " << z << endl;
 }
 
 mat4 rotation_matrix_for_point(GLint i, GLint j)
@@ -437,17 +377,23 @@ mat4 rotation_matrix_for_point(GLint i, GLint j)
   sphere_coordinates(i, j, x, y, z); //world coordinates of q
   vec3 q = vec3(x, y, z);
 
+
   GLfloat x_0, y_0, z_0;
   sphere_coordinates(i_0, j_0, x_0, y_0, z_0); //world coordinates of p
   vec3 p = vec3(x_0, y_0, z_0);
 
   GLfloat angle = acos(dot(p, q)) * 180.0 / M_PI;
 
+  //cout << "dot: " << dot(p,q) << endl;
+
   //rotate from p (at i_0,j_0) to q ( at i,j)
   if (i == i_0 && j == j_0) {
     return mat4(); //identity
   } else {
     vec3 axis = cross(p, q);
+    //cout << "rotation matrix: " << endl;
+    //cout << "axis: " << axis[0] << " " << axis[1] << " " << axis[2] << endl << "angle: " << angle << endl;
+    //printMat(rotate(mat4(), angle, axis));
     return rotate(mat4(), angle, axis);
   }
 }
@@ -518,14 +464,8 @@ GLvoid button_motion(GLint mx, GLint my)
 
 /* --------------------------------------------- */
 
+
 /* menu callback */
-
-// TODO: you'll need to change this one as well...
-
-static const int MENU_FLAT = 1;
-static const int MENU_GOURAUD = 2;
-static const int MENU_PHONG = 3;
-int SHADER = MENU_FLAT;
 
 void menu ( int value )
 {
@@ -561,8 +501,9 @@ void keyboard(GLubyte key, GLint x, GLint y)
     // clean up and exit
     // you may remove these deletes and let the OS do the work
     delete va_input;
-    delete input_program;
-
+    delete input_program_flat;
+    delete input_program_phong;
+    delete input_program_gouraud;
 
     exit(0);
 
