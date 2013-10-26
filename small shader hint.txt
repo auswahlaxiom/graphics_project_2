@@ -1,0 +1,4 @@
+phong shader will have 3D location and normal as output of vertex processing.
+store things like light source and stuff in uniform variables with reasonable values
+
+flat and gouraud will output just a vec3 of rgb

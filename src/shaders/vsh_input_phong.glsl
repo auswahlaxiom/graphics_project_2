@@ -15,17 +15,15 @@ layout (location=0) in vec3 coord;
 layout (location=1) in vec3 norm;
 
 
-
-
 /* -------------- OUTPUT VARIABLES -------------- */
 /* Attributes of the processed vertices           */
 /* Interpolated by the rasterizer and sent with   */
 /* fragments to the fragment shader               */
 /* ---------------------------------------------- */
 
-// TODO: pass interpolated normals
-
-
+// interploated dot products
+noperspective out vec3 interp_norm;
+noperspective out vec3 interp_coord;
 
 
 /* ------------- UNIFORM VARIABLES -------------- */
@@ -39,7 +37,8 @@ layout (location=1) in vec3 norm;
 
 uniform mat4 MV;  // modelview matrix in homogenous coordinates
 uniform mat4 P;   // projection matrix in homogenous coordinates
-
+uniform mat4 NM;  // normal matrix 
+uniform vec3 LL;  // light location
 
 
 /* ---------------------------------------------- */
@@ -51,11 +50,11 @@ uniform mat4 P;   // projection matrix in homogenous coordinates
 
 void main()
 {
-  // TODO: pass interpolated normals to frag shader
-
   vec4 worldCoord = MV * vec4(coord,1.0);
 
+  interp_norm = normalize( -(NM * vec4(norm, 1.0)).xyz );
 
+  interp_coord = vec3(worldCoord);
 
   // apply projection to location in the world coordinates
   // gl_Position is a built-in output variable of type vec4

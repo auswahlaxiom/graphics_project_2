@@ -7,7 +7,7 @@
 /* ---------------------------------------------- */
 
 flat in float NdotL; // interpolated input from vertex processing
-
+flat in float NdotH;
 
 
 /* ------------- UNIFORM VARIABLES -------------- */
@@ -21,8 +21,11 @@ flat in float NdotL; // interpolated input from vertex processing
 
 
 uniform float LightIntensity;
-uniform float AmbientIntensity;
-uniform vec3 DiffuseAndAmbientCoefficient;
+uniform float N_Spec;
+
+uniform vec3 Ambient;
+uniform vec3 K_Diff;
+uniform vec3 K_Spec;
 
 
 /* ----------- OUTPUT VARIABLES ----------------- */
@@ -42,6 +45,8 @@ out vec3 fragcolor;
 
 void main()
 {
+  //Illumination total = I * ( kd*(N·L) + ks*(H·N)^n ) + kaIa
 
-  fragcolor = vec3((LightIntensity * (NdotL > 0.0f ? NdotL : 0.0f) + AmbientIntensity) * DiffuseAndAmbientCoefficient);
+  fragcolor = vec3(LightIntensity * (NdotL * K_Diff + pow(NdotH, N_Spec) * K_Spec) + Ambient);
 }
+

@@ -44,6 +44,9 @@ int number_of_triangles, number_of_vertices, number_of_u_vertices;
 float x_min, y_min, z_min;
 float x_max, y_max, z_max;
 
+//Global FOV angle for zooming
+GLfloat fov_angle = 10.0f;
+
 
 //Input file objects
 VertexArray *va_input = NULL;
@@ -57,7 +60,14 @@ Program *input_program_phong = NULL;
 static const int MENU_FLAT = 1;
 static const int MENU_GOURAUD = 2;
 static const int MENU_PHONG = 3;
+static const int MENU_ZOOM_IN = 4;
+static const int MENU_ZOOM_OUT = 5;
+static const int MENU_DIFFUSE = 6;
+static const int MENU_SPECULAR = 7;
+
 int SHADER = MENU_FLAT;
+
+int MATERIAL = MENU_DIFFUSE;
 
 
 /*--------Utility----------*/
@@ -77,7 +87,7 @@ void printMat(glm::mat4  mat){
 
 void setup_input_buffers()
 {
-  ifstream ifs("inputs/bunny2.t");
+  ifstream ifs("input.t");
 
   ifs >> number_of_triangles >> number_of_u_vertices;
   number_of_vertices = number_of_triangles * 3;
@@ -241,9 +251,9 @@ void draw()
   // Compute projection matrix; perspective() is a glm function
   // Arguments: field of view in DEGREES(!), aspect ratio (1 if square window), distance to front and back clipping plane
   // Camera is located at the origin and points along -Z direction
-  GLfloat fov_angle = 10.0f;
-  GLfloat view_distance = 1.f / float(tan((fov_angle * M_PI / 180.f) /  2.0f));
-
+  
+  GLfloat view_distance = 1.f / float(tan((10.f * M_PI / 180.f) /  2.0f));
+  cout << "view distance: " << view_distance << endl;
   mat4 P = perspective(fov_angle,1.0f, view_distance - 1.f, view_distance + 3.f);
 
   // 1) translate mesh to origin
@@ -266,13 +276,28 @@ void draw()
 
   mat4 NM = R_trackball_0 * R_trackball; // Normal matrix is just the rotation, normals aren't affected by trans and are normalized
 
-  vec3 LL = vec3(0.0f, 0.0f, 0.0f); // A lightsource in front of and to the upper right of the model
+  vec3 LL = vec3(0.0f, 0.5f, 0.f); // Lightsource location above viewpoint
 
   // fsh uniforms
+  //Illumination total = I * ( kd*(N·L) + ks*(H·N)^n ) + kaIa
   GLfloat LightIntensity = 0.7f;
-  GLfloat AmbientIntensity = 0.3f;
-  vec3 DiffuseAndAmbientCoefficient = vec3(0.2f, 0.6f, 0.1f);
+  GLfloat N_Spec = 1000.f;
+
+  vec3 K_Spec;
+  vec3 Ambient = vec3(0.1f, 0.4f, 0.1f);
+  vec3 K_Diff = vec3(0.2f, 0.5f, 0.4f);
+
+  switch(MATERIAL)
+  {
+    case MENU_DIFFUSE:
+      K_Spec = vec3(0.f,0.f,0.f);
+      break;
+    case MENU_SPECULAR:
+      K_Spec = vec3(0.7f, -0.5f, -0.3f);
+      break;
+  }
   
+
 
   //=============== Input Program ================
   Program *input_program; 
@@ -304,8 +329,11 @@ void draw()
 
     // Fragment program uniforms
     input_program->setUniform("LightIntensity", &LightIntensity);
-    input_program->setUniform("AmbientIntensity", &AmbientIntensity);
-    input_program->setUniform("DiffuseAndAmbientCoefficient", &DiffuseAndAmbientCoefficient[0]);
+    input_program->setUniform("N_Spec", &N_Spec);
+
+    input_program->setUniform("K_Diff", &K_Diff[0]);
+    input_program->setUniform("K_Spec", &K_Spec[0]);
+    input_program->setUniform("Ambient", &Ambient[0]);
 
     input_program->on();
 
@@ -483,6 +511,23 @@ void menu ( int value )
     case MENU_PHONG:
       SHADER = MENU_PHONG;
       break;
+    case MENU_ZOOM_IN:
+      fov_angle *= 0.8f;
+      cout << "Viewing angle is " << fov_angle << endl;
+      break;
+    case MENU_ZOOM_OUT:
+      fov_angle *= 1.2f;
+      if (fov_angle > 89.f) {
+        fov_angle = 89.f;
+      }
+      cout << "Viewing angle is " << fov_angle << endl;
+      break;
+    case MENU_DIFFUSE:
+      MATERIAL = MENU_DIFFUSE;
+      break;
+    case MENU_SPECULAR:
+      MATERIAL = MENU_SPECULAR;
+      break;
     }
 
   // and again, in case any rendering paramters changed, redraw
@@ -578,9 +623,15 @@ GLint init_glut(GLint *argc, char **argv)
   /* create menu */
   // you'll need to change this to build your menu
   GLint menuID = glutCreateMenu(menu);
+
   glutAddMenuEntry("Flat",MENU_FLAT);
   glutAddMenuEntry("Gouraud",MENU_GOURAUD);
   glutAddMenuEntry("Phong",MENU_PHONG);
+  glutAddMenuEntry("Zoom In", MENU_ZOOM_IN);
+  glutAddMenuEntry("Zoom Out", MENU_ZOOM_OUT);
+  glutAddMenuEntry("Diffuse", MENU_DIFFUSE);
+  glutAddMenuEntry("Specular", MENU_SPECULAR);
+
   glutSetMenu(menuID);
   glutAttachMenu(GLUT_RIGHT_BUTTON);
 

@@ -15,18 +15,15 @@ layout (location=0) in vec3 coord;
 layout (location=1) in vec3 norm;
 
 
-
-
 /* -------------- OUTPUT VARIABLES -------------- */
 /* Attributes of the processed vertices           */
 /* Interpolated by the rasterizer and sent with   */
 /* fragments to the fragment shader               */
 /* ---------------------------------------------- */
 
-//flat dot products
+// interploated dot products
 flat out float NdotL;
-
-
+flat out float NdotH;
 
 
 /* ------------- UNIFORM VARIABLES -------------- */
@@ -44,7 +41,6 @@ uniform mat4 NM;  // normal matrix
 uniform vec3 LL;  // light location
 
 
-
 /* ---------------------------------------------- */
 /* ----------- MAIN FUNCTION -------------------- */
 /* goal: set gl_Position (location of the         */
@@ -60,8 +56,14 @@ void main()
 
   vec3 N = normalize( -(NM * vec4(norm, 1.0)).xyz );
 
+  //viewpoint is (0,0,0), so V is negative world coord
+  vec3 V = normalize(-vec3(worldCoord));
+
+  vec3 H = (1.f / (length(V) + length(L))) * (V + L);
+
   // Set N dot L for fragment program
-  NdotL = dot(N,L);
+  NdotL = (dot(N,L) > 0.0f ? dot(N,L) : 0.0f);
+  NdotH = (dot(N,H) > 0.0f ? dot(N,H) : 0.0f);
 
   // apply projection to location in the world coordinates
   // gl_Position is a built-in output variable of type vec4
